@@ -1,1 +1,1 @@
-"# taller_aplicaciones" 
+# Proyecto final de la asignatura Taller de Aplicaciones
