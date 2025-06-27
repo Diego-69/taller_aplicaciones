@@ -7,8 +7,6 @@ DB_CONFIG = {
     'password': 'ignacio123',
     'host': 'localhost', 
     'port': '5432',
-    # --- LÍNEA AÑADIDA PARA SOLUCIONAR EL ERROR DE CODIFICACIÓN ---
-    # Se usa 'latin1' que es común para bases de datos en español.
     'client_encoding': 'latin1' 
 }
 
@@ -18,7 +16,6 @@ def crear_usuario_rrhh():
     El rol 'rrhh' tiene id=2 según tu script SQL.
     """
     try:
-        # Intenta conectar a la base de datos
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
 
@@ -47,10 +44,8 @@ def crear_usuario_rrhh():
         cur.close()
         conn.close()
     
-    # Maneja errores específicos de la base de datos
     except psycopg2.Error as e:
         print(f"Error al conectar o al interactuar con la base de datos: {e}")
-    # Maneja cualquier otro error inesperado
     except Exception as e:
         print(f"Ocurrió un error inesperado: {e}")
 

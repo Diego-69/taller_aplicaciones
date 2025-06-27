@@ -10,7 +10,6 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont, QIcon
 from PyQt6.QtCore import Qt
 
-# --- CONFIGURA TUS DATOS DE CONEXIÓN A POSTGRESQL AQUÍ ---
 DB_CONFIG = {
     'dbname': 'taller_apps',
     'user': 'ignacio',
@@ -27,7 +26,6 @@ class DatabaseManager:
         try:
             self.conn = psycopg2.connect(**DB_CONFIG)
         except psycopg2.OperationalError as e:
-            # Este error es crítico, se muestra al iniciar.
             self.show_critical_error(f"No se pudo conectar a la base de datos:\n{e}")
             sys.exit(1) # Cierra la aplicación si no hay conexión
 
@@ -62,7 +60,7 @@ class DatabaseManager:
             
             # Si el usuario existe pero la contraseña es incorrecta, o no existe
             if user_data:
-                self.log_access(user_data[0], False) # Log de intento fallido
+                self.log_access(user_data[0], False) 
             return None
 
     def log_access(self, user_id, success):
@@ -187,7 +185,7 @@ class LoginWindow(QDialog):
         user_info = self.db_manager.check_user(username, password)
         if user_info:
             self.user_info = user_info
-            self.accept() # Cierra el diálogo con éxito
+            self.accept()
         else:
             QMessageBox.warning(self, "Error de Autenticación", "Usuario o contraseña incorrectos.")
 
