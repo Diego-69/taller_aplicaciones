@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 Sistema de Gestión de Recursos Humanos - "El Correo de Yury"
 Este proyecto es una aplicación de escritorio desarrollada en Python para la gestión de la nómina y los datos de los trabajadores de la empresa "El Correo de Yury". La aplicación centraliza la información de los empleados, automatiza tareas de RR.HH. y ofrece un portal de autoservicio para los trabajadores, reemplazando la gestión manual a través de planillas Excel.
 
@@ -92,3 +93,6 @@ Contraseña: 12345
 ¡Listo! Ya puedes empezar a utilizar el sistema.
 
 Proyecto desarrollado como solución a las necesidades de gestión de personal de "El Correo de Yury".
+=======
+# Proyecto final de la asignatura Taller de Aplicaciones
+>>>>>>> 2bc454a3438034655e6752893789749b3690082d
