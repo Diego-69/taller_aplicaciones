@@ -1,1 +1,1 @@
-# Proyecto final del la asignatura Taller de Aplicaciones
+# Proyecto final de la asignatura Taller de Aplicaciones
