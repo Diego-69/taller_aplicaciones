@@ -4,86 +4,78 @@ import bcrypt
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTableWidget, QTableWidgetItem, QPushButton, QLineEdit, QLabel,
-    QMessageBox, QDialog, QFormLayout, QComboBox, QTabWidget,
+    QMessageBox, QDialog, QFormLayout, QComboBox, QStackedWidget,
     QGroupBox, QHeaderView
 )
-from PyQt6.QtGui import QFont, QIcon
-from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont, QIcon, QPalette, QColor, QAction
+from PyQt6.QtCore import Qt, pyqtSignal
 
+# --- CONFIGURA TUS DATOS DE CONEXIÓN A POSTGRESQL AQUÍ ---
 DB_CONFIG = {
     'dbname': 'taller_apps',
     'user': 'ignacio',
     'password': 'ignacio9980',
     'host': 'localhost',
-    'port': '5432'
+    'port': '5432',
+    'client_encoding': 'latin1' # Mantenemos esto por si hay caracteres especiales
 }
 
 class DatabaseManager:
     """
-    Clase para manejar todas las interacciones con la base de datos PostgreSQL.
+    Clase centralizada para manejar todas las interacciones con la base de datos.
     """
-    def __init__(self):    
+    def __init__(self):
+        self.conn = None
         try:
             self.conn = psycopg2.connect(**DB_CONFIG)
         except psycopg2.OperationalError as e:
-            self.show_critical_error(f"No se pudo conectar a la base de datos:\n{e}")
-            sys.exit(1) # Cierra la aplicación si no hay conexión
-
-    def show_critical_error(self, message):
-        msg_box = QMessageBox()
-        msg_box.setIcon(QMessageBox.Icon.Critical)
-        msg_box.setText("Error de Conexión")
-        msg_box.setInformativeText(message)
-        msg_box.setWindowTitle("Error Crítico")
-        msg_box.exec()
+            QMessageBox.critical(None, "Error de Conexión", f"No se pudo conectar a la base de datos:\n{e}")
+            sys.exit(1)
 
     def check_user(self, username, password):
-        """
-        Verifica las credenciales del usuario contra la base de datos.
-        Devuelve la información del usuario si es exitoso, de lo contrario None.
-        """
+        """Verifica las credenciales del usuario."""
         with self.conn.cursor() as cur:
             cur.execute("""
                 SELECT u.id, u.password_hash, u.rol_id, r.nombre, u.rut_trabajador
-                FROM usuario u
-                JOIN rol r ON u.rol_id = r.id
+                FROM usuario u JOIN rol r ON u.rol_id = r.id
                 WHERE u.username = %s AND u.activo = TRUE
             """, (username,))
             user_data = cur.fetchone()
-
+            if user_data and bcrypt.checkpw(password.encode('utf-8'), user_data[1].encode('utf-8')):
+                self.log_access(user_data[0], True)
+                return {'id': user_data[0], 'role_id': user_data[2], 'role_name': user_data[3], 'worker_rut': user_data[4]}
             if user_data:
-                user_id, hashed_password, role_id, role_name, worker_rut = user_data
-                # Verificar la contraseña
-                if bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8')):
-                    self.log_access(user_id, True)
-                    return {'id': user_id, 'role_id': role_id, 'role_name': role_name, 'worker_rut': worker_rut}
-            
-            # Si el usuario existe pero la contraseña es incorrecta, o no existe
-            if user_data:
-                self.log_access(user_data[0], False) 
+                self.log_access(user_data[0], False)
             return None
 
+    def create_user(self, username, password, role_id, worker_rut=None):
+        """Crea un nuevo usuario en la base de datos."""
+        try:
+            with self.conn.cursor() as cur:
+                salt = bcrypt.gensalt()
+                password_hash = bcrypt.hashpw(password.encode('utf-8'), salt)
+                cur.execute("""
+                    INSERT INTO usuario (username, password_hash, rol_id, rut_trabajador, activo)
+                    VALUES (%s, %s, %s, %s, TRUE)
+                """, (username, password_hash.decode('utf-8'), role_id, worker_rut))
+                self.conn.commit()
+            return True, "Usuario creado exitosamente."
+        except psycopg2.IntegrityError:
+            self.conn.rollback()
+            return False, "El nombre de usuario ya existe."
+        except Exception as e:
+            self.conn.rollback()
+            return False, f"Ocurrió un error: {e}"
+
     def log_access(self, user_id, success):
-        """Registra un intento de inicio de sesión en la tabla log_acceso."""
+        """Registra un intento de inicio de sesión."""
         with self.conn.cursor() as cur:
-            # IP no se captura en esta versión, se deja como NULL
-            cur.execute("""
-                INSERT INTO log_acceso (usuario_id, exito, ip_origen)
-                VALUES (%s, %s, %s)
-            """, (user_id, success, '127.0.0.1'))
+            cur.execute("INSERT INTO log_acceso (usuario_id, exito) VALUES (%s, %s)", (user_id, success))
             self.conn.commit()
 
     def get_workers_summary(self, filters=None):
-        """
-        Obtiene un listado resumen de los trabajadores.
-        Puede aplicar filtros para la vista del Jefe de RR.HH.
-        """
-        query = """
-            SELECT t.rut, t.nombre, t.sexo, dl.cargo
-            FROM trabajador t
-            JOIN datos_laborales dl ON t.rut = dl.rut_trabajador
-            WHERE dl.estado = 'activo'
-        """
+        """Obtiene un listado resumen de los trabajadores."""
+        query = "SELECT t.rut, t.nombre, t.sexo, dl.cargo FROM trabajador t JOIN datos_laborales dl ON t.rut = dl.rut_trabajador WHERE dl.estado = 'activo'"
         params = []
         if filters:
             conditions = []
@@ -93,128 +85,239 @@ class DatabaseManager:
             if filters.get('cargo'):
                 conditions.append("dl.cargo ILIKE %s")
                 params.append(f"%{filters['cargo']}%")
-            if filters.get('area_id'):
-                conditions.append("dl.area_id = %s")
-                params.append(filters['area_id'])
-            if filters.get('departamento_id'):
-                conditions.append("dl.departamento_id = %s")
-                params.append(filters['departamento_id'])
-
             if conditions:
                 query += " AND " + " AND ".join(conditions)
-
         with self.conn.cursor() as cur:
             cur.execute(query, tuple(params))
             return cur.fetchall()
 
-    def get_areas(self):
+    def get_roles(self):
+        """Obtiene todos los roles disponibles."""
         with self.conn.cursor() as cur:
-            cur.execute("SELECT id, nombre FROM area ORDER BY nombre")
-            return cur.fetchall()
-            
-    def get_departments_by_area(self, area_id):
-        with self.conn.cursor() as cur:
-            cur.execute("SELECT id, nombre FROM departamento WHERE area_id = %s ORDER BY nombre", (area_id,))
-            return cur.fetchall()
-            
-    def get_all_departments(self):
-        with self.conn.cursor() as cur:
-            cur.execute("SELECT id, nombre FROM departamento ORDER BY nombre")
+            cur.execute("SELECT id, nombre FROM rol ORDER BY nombre")
             return cur.fetchall()
 
-    def get_worker_details(self, rut):
-        """Obtiene todos los detalles de un trabajador para el formulario."""
-        details = {}
+    def get_unassigned_workers(self):
+        """Obtiene trabajadores que aún no tienen una cuenta de usuario."""
         with self.conn.cursor() as cur:
-            # Datos personales
-            cur.execute("SELECT nombre, sexo, direccion, telefono, fecha_nacimiento, email FROM trabajador WHERE rut = %s", (rut,))
-            details['personal'] = cur.fetchone()
-            # Datos laborales
-            cur.execute("SELECT cargo, fecha_de_ingreso, area_id, departamento_id FROM datos_laborales WHERE rut_trabajador = %s", (rut,))
-            details['laboral'] = cur.fetchone()
-            # Contactos de emergencia
-            cur.execute("SELECT nombre_contacto, relacion, telefono_contacto FROM contactos_emergencia WHERE rut_trabajador = %s", (rut,))
-            details['emergencia'] = cur.fetchall()
-            # Cargas familiares
-            cur.execute("SELECT nombre, parentesco, sexo, rut FROM cargas_familiares WHERE rut_trabajador = %s", (rut,))
-            details['cargas'] = cur.fetchall()
-        return details
+            cur.execute("""
+                SELECT t.rut, t.nombre FROM trabajador t
+                LEFT JOIN usuario u ON t.rut = u.rut_trabajador
+                WHERE u.rut_trabajador IS NULL AND t.rut IS NOT NULL
+                ORDER BY t.nombre
+            """)
+            return cur.fetchall()
 
     def close(self):
-        """Cierra la conexión a la base de datos."""
         if self.conn:
             self.conn.close()
 
-class LoginWindow(QDialog):
-    """Ventana de diálogo para el inicio de sesión."""
+
+class LoginAndRegisterWindow(QDialog):
+    """
+    Ventana unificada para iniciar sesión y registrar nuevos usuarios.
+    """
+    # Señal que se emite cuando el login es exitoso
+    login_successful = pyqtSignal(dict)
+
     def __init__(self, db_manager):
         super().__init__()
         self.db_manager = db_manager
-        self.user_info = None
         self.initUI()
 
     def initUI(self):
-        self.setWindowTitle("Inicio de Sesión - El Correo de Yury")
-        self.setFixedSize(350, 200)
+        self.setWindowTitle("Bienvenido - El Correo de Yury")
+        self.setFixedSize(400, 450)
+        self.setStyleSheet("""
+            QDialog { background-color: #f0f0f0; }
+            QLabel { font-size: 14px; }
+            QLineEdit { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+            QPushButton { 
+                background-color: #007bff; color: white; padding: 10px; 
+                border-radius: 5px; font-size: 16px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #0056b3; }
+            QPushButton#linkButton {
+                background-color: transparent; color: #007bff; border: none;
+                font-size: 12px; text-decoration: underline; font-weight: normal;
+            }
+        """)
 
-        layout = QVBoxLayout()
-        form_layout = QFormLayout()
+        # Usamos un StackedWidget para cambiar entre login y registro
+        self.stacked_widget = QStackedWidget()
+        self.login_widget = self.create_login_widget()
+        self.register_widget = self.create_register_widget()
 
-        self.username_input = QLineEdit(self)
-        self.password_input = QLineEdit(self)
-        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.stacked_widget.addWidget(self.login_widget)
+        self.stacked_widget.addWidget(self.register_widget)
 
-        form_layout.addRow("Usuario:", self.username_input)
-        form_layout.addRow("Contraseña:", self.password_input)
+        main_layout = QVBoxLayout(self)
+        main_layout.addWidget(self.stacked_widget)
 
-        self.login_button = QPushButton("Ingresar", self)
-        self.login_button.clicked.connect(self.handle_login)
+    def create_login_widget(self):
+        """Crea el widget de la interfaz de login."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setSpacing(20)
+        
+        title = QLabel("Iniciar Sesión")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setFont(QFont("Arial", 24, QFont.Weight.Bold))
 
-        layout.addLayout(form_layout)
-        layout.addWidget(self.login_button)
-        self.setLayout(layout)
+        self.login_user = QLineEdit(placeholderText="Nombre de usuario")
+        self.login_pass = QLineEdit(placeholderText="Contraseña", echoMode=QLineEdit.EchoMode.Password)
+        
+        login_button = QPushButton("Ingresar")
+        login_button.clicked.connect(self.handle_login)
+
+        register_link = QPushButton("¿No tienes cuenta? Regístrate aquí")
+        register_link.setObjectName("linkButton")
+        register_link.setCursor(Qt.CursorShape.PointingHandCursor)
+        register_link.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
+
+        layout.addWidget(title)
+        layout.addWidget(self.login_user)
+        layout.addWidget(self.login_pass)
+        layout.addWidget(login_button)
+        layout.addStretch()
+        layout.addWidget(register_link, alignment=Qt.AlignmentFlag.AlignCenter)
+        return widget
+
+    def create_register_widget(self):
+        """Crea el widget de la interfaz de registro."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setSpacing(15)
+
+        title = QLabel("Crear Nueva Cuenta")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setFont(QFont("Arial", 24, QFont.Weight.Bold))
+
+        self.reg_user = QLineEdit(placeholderText="Nombre de usuario")
+        self.reg_pass = QLineEdit(placeholderText="Contraseña", echoMode=QLineEdit.EchoMode.Password)
+        self.reg_pass_confirm = QLineEdit(placeholderText="Confirmar contraseña", echoMode=QLineEdit.EchoMode.Password)
+        
+        self.reg_role = QComboBox()
+        self.reg_role.addItem("-- Seleccione un rol --", None)
+        for role_id, role_name in self.db_manager.get_roles():
+            self.reg_role.addItem(role_name.capitalize(), role_id)
+        
+        # El ComboBox para trabajadores, inicialmente oculto
+        self.worker_label = QLabel("Asociar a Trabajador:")
+        self.reg_worker = QComboBox()
+        self.worker_label.hide()
+        self.reg_worker.hide()
+        self.reg_role.currentTextChanged.connect(self.toggle_worker_selection)
+
+        register_button = QPushButton("Registrar")
+        register_button.clicked.connect(self.handle_register)
+
+        back_link = QPushButton("Volver a Inicio de Sesión")
+        back_link.setObjectName("linkButton")
+        back_link.setCursor(Qt.CursorShape.PointingHandCursor)
+        back_link.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
+
+        layout.addWidget(title)
+        layout.addWidget(self.reg_user)
+        layout.addWidget(self.reg_pass)
+        layout.addWidget(self.reg_pass_confirm)
+        layout.addWidget(QLabel("Rol de Usuario:"))
+        layout.addWidget(self.reg_role)
+        layout.addWidget(self.worker_label)
+        layout.addWidget(self.reg_worker)
+        layout.addWidget(register_button)
+        layout.addStretch()
+        layout.addWidget(back_link, alignment=Qt.AlignmentFlag.AlignCenter)
+        return widget
+        
+    def toggle_worker_selection(self, role_name):
+        """Muestra u oculta el selector de trabajador basado en el rol."""
+        if role_name.lower() == 'trabajador':
+            self.reg_worker.clear()
+            self.reg_worker.addItem("-- Seleccione un trabajador --", None)
+            for rut, nombre in self.db_manager.get_unassigned_workers():
+                self.reg_worker.addItem(f"{nombre} ({rut})", rut)
+            self.worker_label.show()
+            self.reg_worker.show()
+        else:
+            self.worker_label.hide()
+            self.reg_worker.hide()
 
     def handle_login(self):
-        username = self.username_input.text()
-        password = self.password_input.text()
-
-        if not username or not password:
-            QMessageBox.warning(self, "Error", "El usuario y la contraseña no pueden estar vacíos.")
+        user = self.login_user.text()
+        password = self.login_pass.text()
+        if not user or not password:
+            QMessageBox.warning(self, "Datos incompletos", "Debe ingresar usuario y contraseña.")
             return
-
-        user_info = self.db_manager.check_user(username, password)
+        
+        user_info = self.db_manager.check_user(user, password)
         if user_info:
-            self.user_info = user_info
-            self.accept()
+            self.login_successful.emit(user_info) # Emitir señal con los datos del usuario
+            self.accept() # Cerrar el diálogo de login
         else:
-            QMessageBox.warning(self, "Error de Autenticación", "Usuario o contraseña incorrectos.")
+            QMessageBox.critical(self, "Error", "Usuario o contraseña incorrectos.")
+
+    def handle_register(self):
+        user = self.reg_user.text()
+        password = self.reg_pass.text()
+        confirm_pass = self.reg_pass_confirm.text()
+        role_id = self.reg_role.currentData()
+        
+        if not all([user, password, confirm_pass, role_id is not None]):
+            QMessageBox.warning(self, "Datos incompletos", "Todos los campos son obligatorios.")
+            return
+        if password != confirm_pass:
+            QMessageBox.warning(self, "Error de Contraseña", "Las contraseñas no coinciden.")
+            return
+            
+        worker_rut = None
+        if self.reg_role.currentText().lower() == 'trabajador':
+            worker_rut = self.reg_worker.currentData()
+            if worker_rut is None:
+                QMessageBox.warning(self, "Datos incompletos", "Debe seleccionar un trabajador para asociar la cuenta.")
+                return
+
+        success, message = self.db_manager.create_user(user, password, role_id, worker_rut)
+        if success:
+            QMessageBox.information(self, "Éxito", message)
+            self.login_user.setText(user) # Pre-rellenar el campo de usuario en el login
+            self.login_pass.clear()
+            self.stacked_widget.setCurrentIndex(0) # Volver al login
+        else:
+            QMessageBox.critical(self, "Error de Registro", message)
 
 
 class MainWindow(QMainWindow):
-    """Ventana Principal de la aplicación."""
-    def __init__(self, db_manager, user_info):
-        super().__init__()
-        self.db_manager = db_manager
-        self.user_info = user_info
-        
-        # Diccionarios para guardar mapeos de id -> nombre
-        self.areas_map = {id: name for id, name in self.db_manager.get_areas()}
-        self.depts_map = {id: name for id, name in self.db_manager.get_all_departments()}
+    """
+    Ventana Principal de la aplicación, visible después del login.
+    """
+    logout_requested = pyqtSignal()
 
+    def __init__(self, user_info, db_manager):
+        super().__init__()
+        self.user_info = user_info
+        self.db_manager = db_manager
         self.initUI()
         self.load_initial_data()
 
     def initUI(self):
-        self.setWindowTitle(f"SIGERH - El Correo de Yury (Usuario: {self.user_info['role_name']})")
+        self.setWindowTitle(f"SIGERH - El Correo de Yury (Usuario: {self.user_info['role_name'].capitalize()})")
         self.setGeometry(100, 100, 1200, 700)
         
-        # El widget central
+        # Menú
+        menu_bar = self.menuBar()
+        file_menu = menu_bar.addMenu("&Archivo")
+        logout_action = QAction("Cerrar Sesión", self)
+        logout_action.triggered.connect(self.logout)
+        file_menu.addAction(logout_action)
+
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         self.main_layout = QHBoxLayout(central_widget)
 
-        # Determinar la interfaz según el rol
-        # Roles 'admin', 'jefe_rrhh', 'rrhh' tienen la misma vista de gestión
+        # La interfaz se adapta al rol del usuario
         if self.user_info['role_name'] in ['admin', 'jefe_rrhh', 'rrhh']:
             self.setup_hr_ui()
         elif self.user_info['role_name'] == 'trabajador':
@@ -222,51 +325,50 @@ class MainWindow(QMainWindow):
 
     def setup_hr_ui(self):
         """Configura la interfaz para usuarios de RR.HH."""
-        # Panel de filtros
+        # Panel izquierdo con filtros y acciones
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
+        left_panel.setFixedWidth(300)
+
+        # Filtros (solo para jefe_rrhh)
         filter_group = QGroupBox("Filtros de Búsqueda")
         filter_layout = QFormLayout()
-
         self.sexo_filter = QComboBox()
         self.sexo_filter.addItems(["Todos", "Masculino", "Femenino"])
-        
         self.cargo_filter = QLineEdit()
-
-        self.area_filter = QComboBox()
-        self.area_filter.addItem("Todas", None)
-        for area_id, area_name in self.areas_map.items():
-            self.area_filter.addItem(area_name, area_id)
-
-        self.depto_filter = QComboBox()
-        self.depto_filter.addItem("Todos", None)
-
-        # Conectar señal de área para actualizar departamentos
-        self.area_filter.currentIndexChanged.connect(self.update_department_filter)
-
         filter_layout.addRow("Sexo:", self.sexo_filter)
         filter_layout.addRow("Cargo:", self.cargo_filter)
-        filter_layout.addRow("Área:", self.area_filter)
-        filter_layout.addRow("Departamento:", self.depto_filter)
-
+        filter_group.setLayout(filter_layout)
+        
         self.filter_button = QPushButton("Filtrar")
         self.clear_button = QPushButton("Limpiar Filtros")
+        self.filter_button.clicked.connect(self.apply_filters)
+        self.clear_button.clicked.connect(self.clear_filters)
+
+        # Acciones
+        action_group = QGroupBox("Acciones")
+        action_layout = QVBoxLayout()
+        self.add_button = QPushButton("Agregar Trabajador")
+        self.edit_button = QPushButton("Ver/Editar Ficha")
+        self.delete_button = QPushButton("Dar de Baja")
+        action_layout.addWidget(self.add_button)
+        action_layout.addWidget(self.edit_button)
+        action_layout.addWidget(self.delete_button)
+        action_group.setLayout(action_layout)
+
+        left_layout.addWidget(filter_group)
+        left_layout.addWidget(self.filter_button)
+        left_layout.addWidget(self.clear_button)
+        left_layout.addWidget(action_group)
+        left_layout.addStretch()
         
-        # Solo el jefe de RRHH puede filtrar
+        # Ocultar filtros si no es jefe de rrhh
         is_jefe = self.user_info['role_name'] == 'jefe_rrhh'
         filter_group.setVisible(is_jefe)
         self.filter_button.setVisible(is_jefe)
         self.clear_button.setVisible(is_jefe)
-        
-        self.filter_button.clicked.connect(self.apply_filters)
-        self.clear_button.clicked.connect(self.clear_filters)
 
-        filter_vbox = QVBoxLayout()
-        filter_vbox.addWidget(filter_group)
-        filter_vbox.addLayout(filter_layout)
-        filter_vbox.addWidget(self.filter_button)
-        filter_vbox.addWidget(self.clear_button)
-        filter_vbox.addStretch()
-
-        # Tabla de trabajadores
+        # Panel derecho con la tabla
         self.table = QTableWidget()
         self.table.setColumnCount(4)
         self.table.setHorizontalHeaderLabels(["RUT", "Nombre", "Sexo", "Cargo"])
@@ -274,124 +376,22 @@ class MainWindow(QMainWindow):
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
 
-        # Botones de acción
-        self.add_button = QPushButton("Agregar Trabajador")
-        self.edit_button = QPushButton("Ver/Editar Ficha")
-        self.delete_button = QPushButton("Dar de Baja") # Lógica de 'estado'
-        
-        action_layout = QHBoxLayout()
-        action_layout.addWidget(self.add_button)
-        action_layout.addWidget(self.edit_button)
-        action_layout.addWidget(self.delete_button)
-        
-        # Panel derecho (tabla y acciones)
-        right_layout = QVBoxLayout()
-        right_layout.addWidget(self.table)
-        right_layout.addLayout(action_layout)
-        
-        # Añadir paneles al layout principal
-        self.main_layout.addLayout(filter_vbox, 1) # Filtros ocupan 1/4 del espacio
-        self.main_layout.addLayout(right_layout, 3) # Tabla ocupa 3/4
-
-    def update_department_filter(self):
-        self.depto_filter.clear()
-        self.depto_filter.addItem("Todos", None)
-        area_id = self.area_filter.currentData()
-        if area_id:
-            departments = self.db_manager.get_departments_by_area(area_id)
-            for dept_id, dept_name in departments:
-                self.depto_filter.addItem(dept_name, dept_id)
-                
-    def apply_filters(self):
-        filters = {}
-        if self.sexo_filter.currentIndex() > 0:
-            filters['sexo'] = self.sexo_filter.currentText()
-        if self.cargo_filter.text():
-            filters['cargo'] = self.cargo_filter.text()
-        if self.area_filter.currentData():
-            filters['area_id'] = self.area_filter.currentData()
-        if self.depto_filter.currentData():
-            filters['departamento_id'] = self.depto_filter.currentData()
-            
-        self.load_workers_data(filters)
-
-    def clear_filters(self):
-        self.sexo_filter.setCurrentIndex(0)
-        self.cargo_filter.clear()
-        self.area_filter.setCurrentIndex(0)
-        self.depto_filter.setCurrentIndex(0)
-        self.load_workers_data()
+        self.main_layout.addWidget(left_panel)
+        self.main_layout.addWidget(self.table)
 
     def setup_worker_ui(self):
-        """Configura la interfaz para un trabajador regular."""
-        rut = self.user_info.get('worker_rut')
-        if not rut:
-            self.main_layout.addWidget(QLabel("Este usuario no está asociado a ningún trabajador."))
-            return
-            
-        worker_data = self.db_manager.get_worker_details(rut)
-        
-        main_form_layout = QFormLayout()
-        
-        # Pestañas para organizar la información
-        tabs = QTabWidget()
-        
-        # Pestaña 1: Datos Personales
-        personal_tab = QWidget()
-        personal_layout = QFormLayout(personal_tab)
-        self.w_nombre = QLineEdit(worker_data['personal'][0])
-        self.w_rut = QLineEdit(rut)
-        self.w_rut.setReadOnly(True) # RUT no se puede modificar
-        self.w_sexo = QLineEdit(worker_data['personal'][1])
-        self.w_sexo.setReadOnly(True) # Sexo tampoco debería ser modificable por el empleado
-        self.w_direccion = QLineEdit(worker_data['personal'][2])
-        self.w_telefono = QLineEdit(worker_data['personal'][3])
-        
-        personal_layout.addRow("Nombre Completo:", self.w_nombre)
-        personal_layout.addRow("RUT:", self.w_rut)
-        personal_layout.addRow("Sexo:", self.w_sexo)
-        personal_layout.addRow("Dirección:", self.w_direccion)
-        personal_layout.addRow("Teléfono:", self.w_telefono)
-        tabs.addTab(personal_tab, "Datos Personales")
+        """Configura la interfaz para un trabajador."""
+        # ... (La lógica para la vista del trabajador iría aquí)
+        label = QLabel(f"Bienvenido, trabajador {self.user_info['worker_rut']}.\n\nVista de empleado en construcción.")
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label.setFont(QFont("Arial", 18))
+        self.main_layout.addWidget(label)
 
-        # Pestaña 2: Datos Laborales (solo lectura)
-        laboral_tab = QWidget()
-        laboral_layout = QFormLayout(laboral_tab)
-        
-        cargo = QLineEdit(worker_data['laboral'][0])
-        fecha_ingreso = QLineEdit(str(worker_data['laboral'][1]))
-        area = QLineEdit(self.areas_map.get(worker_data['laboral'][2]))
-        depto = QLineEdit(self.depts_map.get(worker_data['laboral'][3]))
-        
-        for field in [cargo, fecha_ingreso, area, depto]:
-            field.setReadOnly(True)
-
-        laboral_layout.addRow("Cargo:", cargo)
-        laboral_layout.addRow("Fecha Ingreso:", fecha_ingreso)
-        laboral_layout.addRow("Área:", area)
-        laboral_layout.addRow("Departamento:", depto)
-        tabs.addTab(laboral_tab, "Datos Laborales")
-
-        # Pestaña 3: Contactos de Emergencia y Cargas (Modificable)
-        # En una app real, esto sería más complejo con tablas y botones add/remove
-        # Por simplicidad, se muestra como editable.
-        contacts_tab = QWidget()
-        # ... Lógica para mostrar y editar contactos y cargas
-        tabs.addTab(contacts_tab, "Contactos y Cargas")
-
-        self.save_button = QPushButton("Guardar Cambios")
-        # self.save_button.clicked.connect(self.save_worker_changes)
-        
-        self.main_layout.addWidget(tabs)
-        self.main_layout.addWidget(self.save_button)
-        
     def load_initial_data(self):
-        """Carga los datos iniciales al abrir la ventana."""
         if self.user_info['role_name'] != 'trabajador':
             self.load_workers_data()
 
     def load_workers_data(self, filters=None):
-        """Carga los datos de los trabajadores en la tabla."""
         try:
             worker_data = self.db_manager.get_workers_summary(filters)
             self.table.setRowCount(len(worker_data))
@@ -399,28 +399,70 @@ class MainWindow(QMainWindow):
                 for col_idx, col_data in enumerate(row_data):
                     self.table.setItem(row_idx, col_idx, QTableWidgetItem(str(col_data)))
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"No se pudieron cargar los datos de los trabajadores:\n{e}")
+            QMessageBox.critical(self, "Error", f"No se pudieron cargar los datos: {e}")
 
-    def closeEvent(self, event):
-        """Asegura que la conexión de la BD se cierre al salir."""
-        self.db_manager.close()
-        event.accept()
+    def apply_filters(self):
+        filters = {}
+        if self.sexo_filter.currentIndex() > 0:
+            filters['sexo'] = self.sexo_filter.currentText()
+        if self.cargo_filter.text():
+            filters['cargo'] = self.cargo_filter.text()
+        self.load_workers_data(filters)
+
+    def clear_filters(self):
+        self.sexo_filter.setCurrentIndex(0)
+        self.cargo_filter.clear()
+        self.load_workers_data()
+        
+    def logout(self):
+        self.logout_requested.emit()
+        self.close()
+
+def main():
+    """Función principal que controla el flujo de la aplicación."""
+    app = QApplication(sys.argv)
+    db_manager = DatabaseManager()
+    
+    # Bucle para manejar el login/logout
+    while True:
+        login_window = LoginAndRegisterWindow(db_manager)
+        
+        # Variable para guardar los datos del usuario si el login es exitoso
+        user_info = None
+        
+        def on_login_success(info):
+            nonlocal user_info
+            user_info = info
+        
+        login_window.login_successful.connect(on_login_success)
+        
+        # Muestra la ventana de login y espera a que se cierre
+        login_window.exec()
+        
+        if user_info:
+            main_window = MainWindow(user_info, db_manager)
+            
+            # Variable para saber si se solicitó logout
+            logout_flag = False
+            def handle_logout():
+                nonlocal logout_flag
+                logout_flag = True
+
+            main_window.logout_requested.connect(handle_logout)
+            main_window.show()
+            app.exec() # Inicia el bucle de eventos de la ventana principal
+            
+            # Si el bucle termina y logout_flag es True, el while continuará
+            # para mostrar de nuevo la ventana de login.
+            if not logout_flag:
+                break # Si se cierra la ventana principal sin logout, termina la app
+        else:
+            # Si se cierra la ventana de login sin éxito, termina la app
+            break
+
+    db_manager.close()
+    sys.exit()
+
 
 if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    
-    # Es fundamental crear el DB Manager primero.
-    db = DatabaseManager()
-
-    # Mostrar la ventana de login
-    login_dialog = LoginWindow(db)
-    if login_dialog.exec() == QDialog.DialogCode.Accepted:
-        # Si el login es exitoso, mostrar la ventana principal
-        user_info = login_dialog.user_info
-        main_win = MainWindow(db, user_info)
-        main_win.show()
-        sys.exit(app.exec())
-    else:
-        # Si el login falla o se cierra, salir de la aplicación
-        db.close()
-        sys.exit(0)
+    main()
