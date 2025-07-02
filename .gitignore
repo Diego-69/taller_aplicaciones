@@ -7,7 +7,13 @@ __pycache__/
 env/
 venv/
 .venv/
-pip-log.txt
+pip-log.txt// ...existing code...
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Scripts específicos que no deben subirse
+crear_usuario.py
 pip-delete-this-directory.txt
 .tox/
 .coverage
