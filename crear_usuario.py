@@ -8,7 +8,7 @@ import sys
 DB_CONFIG = {
     'dbname': 'taller_apps',
     'user': 'ignacio',
-    'password': 'ignacio123',
+    'password': 'ignacio9980',
     'host': 'localhost', 
     'port': '5432',
     'client_encoding': 'latin1' 
