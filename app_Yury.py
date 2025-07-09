@@ -129,17 +129,97 @@ class LoginAndRegisterWindow(QDialog):
         self.setWindowTitle("Bienvenido - El Correo de Yury")
         self.setFixedSize(400, 450)
         self.setStyleSheet("""
-            QDialog { background-color: #f0f0f0; }
-            QLabel { font-size: 14px; }
-            QLineEdit { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
-            QPushButton { 
-                background-color: #007bff; color: white; padding: 10px; 
-                border-radius: 5px; font-size: 16px; font-weight: bold;
+            QDialog { 
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #e8f4f8, stop: 1 #d1e9f2);
+                font-family: 'Segoe UI', Arial, sans-serif;
             }
-            QPushButton:hover { background-color: #0056b3; }
+            QLabel { 
+                font-size: 14px; 
+                color: #2c3e50;
+                font-weight: 500;
+            }
+            QLabel[objectName="title"] {
+                color: #1a365d;
+                font-weight: bold;
+                margin-bottom: 10px;
+            }
+            QLineEdit { 
+                padding: 12px 15px; 
+                border: 2px solid #bdc3c7; 
+                border-radius: 8px; 
+                font-size: 14px;
+                background-color: #ffffff;
+                color: #2c3e50;
+                selection-background-color: #3498db;
+                min-height: 20px;
+                line-height: 1.2;
+            }
+            QLineEdit::placeholder {
+                color: #7f8c8d;
+                font-style: italic;
+            }
+            QLineEdit:focus {
+                border-color: #3498db;
+                outline: none;
+                box-shadow: 0 0 5px rgba(52, 152, 219, 0.3);
+            }
+            QComboBox {
+                padding: 10px 15px;
+                border: 2px solid #bdc3c7;
+                border-radius: 8px;
+                font-size: 14px;
+                background-color: #ffffff;
+                color: #2c3e50;
+                min-height: 20px;
+            }
+            QComboBox:focus {
+                border-color: #3498db;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 30px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid #7f8c8d;
+                margin-right: 10px;
+            }
+            QPushButton { 
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #3498db, stop: 1 #2980b9);
+                color: white; 
+                padding: 12px 20px; 
+                border-radius: 8px; 
+                font-size: 16px; 
+                font-weight: bold;
+                border: none;
+                min-height: 20px;
+            }
+            QPushButton:hover { 
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #2980b9, stop: 1 #21618c);
+                transform: translateY(-1px);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #21618c, stop: 1 #1b4f72);
+            }
             QPushButton#linkButton {
-                background-color: transparent; color: #007bff; border: none;
-                font-size: 12px; text-decoration: underline; font-weight: normal;
+                background: transparent; 
+                color: #2980b9; 
+                border: none;
+                font-size: 13px; 
+                text-decoration: underline; 
+                font-weight: normal;
+                padding: 8px;
+            }
+            QPushButton#linkButton:hover {
+                color: #1a5490;
+                background: rgba(52, 152, 219, 0.1);
+                border-radius: 4px;
             }
         """)
 
@@ -162,11 +242,15 @@ class LoginAndRegisterWindow(QDialog):
         layout.setSpacing(20)
         
         title = QLabel("Iniciar Sesión")
+        title.setObjectName("title")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setFont(QFont("Arial", 24, QFont.Weight.Bold))
 
-        self.login_user = QLineEdit(placeholderText="Nombre de usuario")
-        self.login_pass = QLineEdit(placeholderText="Contraseña", echoMode=QLineEdit.EchoMode.Password)
+        self.login_user = QLineEdit()
+        self.login_user.setPlaceholderText("Nombre de usuario")
+        self.login_pass = QLineEdit()
+        self.login_pass.setPlaceholderText("Contraseña")
+        self.login_pass.setEchoMode(QLineEdit.EchoMode.Password)
         
         login_button = QPushButton("Ingresar")
         login_button.clicked.connect(self.handle_login)
@@ -192,12 +276,18 @@ class LoginAndRegisterWindow(QDialog):
         layout.setSpacing(15)
 
         title = QLabel("Crear Nueva Cuenta")
+        title.setObjectName("title")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setFont(QFont("Arial", 24, QFont.Weight.Bold))
 
-        self.reg_user = QLineEdit(placeholderText="Nombre de usuario")
-        self.reg_pass = QLineEdit(placeholderText="Contraseña", echoMode=QLineEdit.EchoMode.Password)
-        self.reg_pass_confirm = QLineEdit(placeholderText="Confirmar contraseña", echoMode=QLineEdit.EchoMode.Password)
+        self.reg_user = QLineEdit()
+        self.reg_user.setPlaceholderText("Nombre de usuario")
+        self.reg_pass = QLineEdit()
+        self.reg_pass.setPlaceholderText("Contraseña")
+        self.reg_pass.setEchoMode(QLineEdit.EchoMode.Password)
+        self.reg_pass_confirm = QLineEdit()
+        self.reg_pass_confirm.setPlaceholderText("Confirmar contraseña")
+        self.reg_pass_confirm.setEchoMode(QLineEdit.EchoMode.Password)
         
         self.reg_role = QComboBox()
         self.reg_role.addItem("-- Seleccione un rol --", None)
