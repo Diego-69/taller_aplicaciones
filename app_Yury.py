@@ -12,7 +12,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 
 # --- CONFIGURA TUS DATOS DE CONEXIÓN A POSTGRESQL AQUÍ ---
 DB_CONFIG = {
-    'dbname': 'taller_apps',
+    'dbname': 'DB_Yury', 
     'user': 'ignacio',
     'password': 'ignacio9980',
     'host': 'localhost',
