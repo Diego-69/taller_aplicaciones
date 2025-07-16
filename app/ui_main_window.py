@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButt
 from PyQt6.QtWidgets import QDialog, QFormLayout, QLineEdit, QComboBox
 from app.database import get_all_workers, delete_worker, get_cargas_by_trabajador, get_contactos_by_trabajador
 from app.database import insert_carga, update_carga, delete_carga, insert_contacto, update_contacto, delete_contacto
+from app.database import get_all_cargos, get_all_departamentos
 import re
 
 def validar_rut(rut: str) -> bool:
@@ -35,13 +36,14 @@ class MainWindow(QWidget):
         self.setLayout(self.layout)
 
     def setup_ui(self):
+        from PyQt6.QtWidgets import QAbstractItemView
         action_layout = QHBoxLayout()
         if self.perfil == 'RRHH':
             add_btn = QPushButton("Añadir Trabajador")
             add_btn.clicked.connect(self.add_worker)
             action_layout.addWidget(add_btn)
-            del_btn = QPushButton("Eliminar Trabajador")
-            del_btn.clicked.connect(self.delete_worker)
+            del_btn = QPushButton("Eliminar Trabajador(es)")
+            del_btn.clicked.connect(self.delete_workers)
             action_layout.addWidget(del_btn)
         # Botón cerrar sesión
         logout_btn = QPushButton("Cerrar sesión")
@@ -51,6 +53,8 @@ class MainWindow(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(["RUT", "Nombre", "Sexo", "Cargo", "Acciones"])
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QTableWidget.SelectionMode.MultiSelection)
         self.layout.addWidget(self.table)
         self.load_workers()
 
@@ -72,23 +76,28 @@ class MainWindow(QWidget):
             self.table.setCellWidget(row_idx, 4, btn)
 
     def add_worker(self):
-        QMessageBox.information(self, "Función", "Aquí se abriría el formulario para añadir trabajador.")
-        # Aquí se llamaría a un diálogo de alta y luego self.load_workers()
+        dlg = WorkerFormDialog(self)
+        if dlg.exec():
+            self.load_workers()
 
-    def delete_worker(self):
-        row = self.table.currentRow()
-        if row < 0:
-            QMessageBox.warning(self, "Selecciona", "Selecciona un trabajador para eliminar.")
+    def delete_workers(self):
+        selected = self.table.selectionModel().selectedRows()
+        if not selected:
+            QMessageBox.warning(self, "Selecciona", "Selecciona uno o más trabajadores para eliminar.")
             return
-        rut = self.table.item(row, 0).text()
-        ok = QMessageBox.question(self, "Confirmar", f"¿Eliminar trabajador {rut}?")
+        ruts = [self.table.item(idx.row(), 0).text() for idx in selected]
+        ok = QMessageBox.question(self, "Confirmar", f"¿Eliminar los siguientes trabajadores?\n{chr(10).join(ruts)}")
         if ok:
-            success, msg = delete_worker(rut)
-            if success:
-                QMessageBox.information(self, "Eliminado", msg)
-                self.load_workers()
+            errores = []
+            for rut in ruts:
+                success, msg = delete_worker(rut)
+                if not success:
+                    errores.append(f"{rut}: {msg}")
+            if not errores:
+                QMessageBox.information(self, "Eliminado", "Todos los trabajadores seleccionados fueron eliminados.")
             else:
-                QMessageBox.critical(self, "Error", msg)
+                QMessageBox.warning(self, "Algunos no eliminados", "No se pudieron eliminar:\n" + "\n".join(errores))
+            self.load_workers()
 
     def open_worker_detail(self, rut):
         dlg = WorkerDetailDialog(rut)
@@ -356,6 +365,78 @@ class ContactoFormDialog(QDialog):
         else:
             success, msg = insert_contacto([self.parent().rut_trabajador, nombre, relacion, telefono])
         if success:
+            QMessageBox.information(self, "Éxito", msg)
+            self.accept()
+        else:
+            QMessageBox.critical(self, "Error", msg)
+
+class WorkerFormDialog(QDialog):
+    """
+    Formulario para añadir un nuevo trabajador desde RRHH.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Añadir Trabajador")
+        layout = QFormLayout()
+        self.rut_input = QLineEdit()
+        self.nombre_input = QLineEdit()
+        self.sexo_combo = QComboBox()
+        self.sexo_combo.addItems(["Masculino", "Femenino", "Otro"])
+        self.direccion_input = QLineEdit()
+        self.telefono_input = QLineEdit()
+        
+        self.cargo_combo = QComboBox()
+        self.depto_combo = QComboBox()
+        self.load_combos()
+
+        layout.addRow("RUT:", self.rut_input)
+        layout.addRow("Nombre completo:", self.nombre_input)
+        layout.addRow("Sexo:", self.sexo_combo)
+        layout.addRow("Dirección:", self.direccion_input)
+        layout.addRow("Teléfono:", self.telefono_input)
+        layout.addRow("Cargo:", self.cargo_combo)
+        layout.addRow("Departamento:", self.depto_combo)
+        
+        save_btn = QPushButton("Guardar")
+        save_btn.clicked.connect(self.save)
+        layout.addRow(save_btn)
+        self.setLayout(layout)
+
+    def load_combos(self):
+        self.cargos = get_all_cargos()
+        self.deptos = get_all_departamentos()
+        for cargo_id, nombre_cargo in self.cargos:
+            self.cargo_combo.addItem(nombre_cargo, cargo_id)
+        for depto_id, nombre_depto in self.deptos:
+            self.depto_combo.addItem(nombre_depto, depto_id)
+
+    def save(self):
+        from app.database import insert_worker
+        rut = self.rut_input.text().strip()
+        nombre = self.nombre_input.text().strip()
+        sexo = self.sexo_combo.currentText()
+        direccion = self.direccion_input.text().strip()
+        telefono = self.telefono_input.text().strip()
+        
+        id_cargo = self.cargo_combo.currentData()
+        id_depto = self.depto_combo.currentData()
+
+        if not all([rut, nombre, sexo, id_cargo, id_depto]):
+            QMessageBox.warning(self, "Datos incompletos", "Todos los campos obligatorios (RUT, Nombre, Sexo, Cargo, Departamento) deben estar completos.")
+            return
+        if not validar_rut(rut):
+            QMessageBox.warning(self, "RUT inválido", "El RUT ingresado no tiene un formato válido.")
+            return
+        if telefono and not validar_telefono(telefono):
+            QMessageBox.warning(self, "Teléfono inválido", "El teléfono debe contener solo números y opcionalmente '+'.")
+            return
+            
+        # La fecha de ingreso se puede manejar automáticamente en la BD o aquí
+        from datetime import date
+        fecha_ingreso = date.today().isoformat()
+
+        ok, msg = insert_worker((rut, nombre, sexo, direccion, telefono, fecha_ingreso, id_cargo, id_depto))
+        if ok:
             QMessageBox.information(self, "Éxito", msg)
             self.accept()
         else:

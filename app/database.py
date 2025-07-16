@@ -27,7 +27,7 @@ def get_db_connection():
         return None
 
 def get_all_workers(filtros=None):
-    """Obtiene todos los trabajadores, con filtros opcionales."""
+    """Obtiene todos los trabajadores con su cargo y departamento."""
     conn = get_db_connection()
     if not conn:
         return []
@@ -49,8 +49,38 @@ def get_all_workers(filtros=None):
     finally:
         conn.close()
 
+def get_all_cargos():
+    """Obtiene todos los cargos de la base de datos."""
+    conn = get_db_connection()
+    if not conn:
+        return []
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, nombre_cargo FROM cargos ORDER BY nombre_cargo")
+            return cur.fetchall()
+    except Exception as e:
+        print(f"Error al obtener cargos: {e}")
+        return []
+    finally:
+        conn.close()
+
+def get_all_departamentos():
+    """Obtiene todos los departamentos de la base de datos."""
+    conn = get_db_connection()
+    if not conn:
+        return []
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, nombre_departamento FROM departamentos ORDER BY nombre_departamento")
+            return cur.fetchall()
+    except Exception as e:
+        print(f"Error al obtener departamentos: {e}")
+        return []
+    finally:
+        conn.close()
+
 def insert_worker(data):
-    """Inserta un nuevo trabajador."""
+    """Inserta un nuevo trabajador en la base de datos."""
     conn = get_db_connection()
     if not conn:
         return False, "Error de conexión"

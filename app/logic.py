@@ -39,10 +39,14 @@ def registrar_trabajador(data):
         return False, "Error de conexión"
     try:
         with conn.cursor() as cur:
-            # Verifica si el usuario ya existe
+            # Verifica si el usuario o el RUT ya existen
             cur.execute("SELECT 1 FROM usuarios WHERE nombre_usuario = %s", (data["username"],))
             if cur.fetchone():
-                return False, "El usuario ya existe"
+                return False, "El nombre de usuario ya existe."
+            cur.execute("SELECT 1 FROM trabajadores WHERE rut = %s", (data["rut"],))
+            if cur.fetchone():
+                return False, "El RUT ya está registrado."
+
             # Obtiene el id del perfil Trabajador
             cur.execute("SELECT id FROM perfiles WHERE nombre_perfil = 'Trabajador'")
             perfil_row = cur.fetchone()
@@ -59,15 +63,19 @@ def registrar_trabajador(data):
             )
             id_usuario = cur.fetchone()[0]
             # Inserta el trabajador (por defecto cargo=1, departamento=1, puedes ajustar esto)
+            # Se asume que el registro de trabajador no asigna cargo ni depto inicialmente.
+            # Esto debería ser completado por RRHH.
             cur.execute(
                 "INSERT INTO trabajadores (rut, id_usuario, nombre_completo, sexo, direccion, telefono, fecha_ingreso, id_cargo, id_departamento) "
-                "VALUES (%s, %s, %s, %s, %s, %s, CURRENT_DATE, 1, 1)",
+                "VALUES (%s, %s, %s, %s, %s, %s, CURRENT_DATE, 1, 1)", # IDs por defecto
                 (data["rut"], id_usuario, data["nombre"], data["sexo"], data["direccion"], data["telefono"])
             )
             conn.commit()
-            return True, "Usuario registrado correctamente"
+            return True, "Usuario registrado correctamente. Un administrador de RRHH asignará su cargo y departamento."
     except Exception as e:
         conn.rollback()
-        return False, str(e)
+        # Evitar exponer detalles de la base de datos en producción
+        print(f"Error en registro: {e}") # Log para depuración
+        return False, "Ocurrió un error inesperado durante el registro."
     finally:
         conn.close()
