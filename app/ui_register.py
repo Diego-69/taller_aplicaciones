@@ -25,6 +25,14 @@ class RegisterDialog(QDialog):
         self.sexo_combo.addItems(["Masculino", "Femenino", "Otro"])
         self.direccion_input = QLineEdit()
         self.telefono_input = QLineEdit()
+        self.cargo_combo = QComboBox()
+        self.depto_combo = QComboBox()
+        # Cargar cargos y departamentos desde la BD
+        from app.database import get_all_cargos, get_all_departamentos
+        for cargo_id, nombre_cargo in get_all_cargos():
+            self.cargo_combo.addItem(nombre_cargo, cargo_id)
+        for depto_id, nombre_depto in get_all_departamentos():
+            self.depto_combo.addItem(nombre_depto, depto_id)
         layout.addRow("Usuario:", self.username_input)
         layout.addRow("Contraseña:", self.password_input)
         layout.addRow("RUT:", self.rut_input)
@@ -32,6 +40,8 @@ class RegisterDialog(QDialog):
         layout.addRow("Sexo:", self.sexo_combo)
         layout.addRow("Dirección:", self.direccion_input)
         layout.addRow("Teléfono:", self.telefono_input)
+        layout.addRow("Cargo:", self.cargo_combo)
+        layout.addRow("Departamento:", self.depto_combo)
         btn = QPushButton("Registrar")
         btn.clicked.connect(self.handle_register)
         layout.addRow(btn)
@@ -46,6 +56,8 @@ class RegisterDialog(QDialog):
             "sexo": self.sexo_combo.currentText(),
             "direccion": self.direccion_input.text().strip(),
             "telefono": self.telefono_input.text().strip(),
+            "id_cargo": self.cargo_combo.currentData(),
+            "id_departamento": self.depto_combo.currentData(),
         }
         # Validaciones detalladas
         if not all([data["username"], data["password"], data["rut"], data["nombre"], data["sexo"]]):

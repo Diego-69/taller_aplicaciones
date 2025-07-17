@@ -79,6 +79,29 @@ def get_all_departamentos():
     finally:
         conn.close()
 
+def get_worker_by_rut(rut):
+    """Obtiene los datos personales completos de un trabajador por su RUT."""
+    conn = get_db_connection()
+    if not conn:
+        return None
+    try:
+        with conn.cursor() as cur:
+            query = '''
+                SELECT t.rut, t.nombre_completo, t.sexo, t.direccion, t.telefono, t.fecha_ingreso, c.nombre_cargo, d.nombre_departamento, a.nombre_area
+                FROM trabajadores t
+                JOIN cargos c ON t.id_cargo = c.id
+                JOIN departamentos d ON t.id_departamento = d.id
+                JOIN areas a ON d.id_area = a.id
+                WHERE t.rut = %s
+            '''
+            cur.execute(query, (rut,))
+            return cur.fetchone()
+    except Exception as e:
+        print(f"Error al obtener datos del trabajador: {e}")
+        return None
+    finally:
+        conn.close()
+
 def insert_worker(data):
     """Inserta un nuevo trabajador en la base de datos."""
     conn = get_db_connection()
@@ -124,9 +147,17 @@ def delete_worker(rut):
         return False, "Error de conexión"
     try:
         with conn.cursor() as cur:
+            # Obtener el id_usuario asociado al trabajador
+            cur.execute("SELECT id_usuario FROM trabajadores WHERE rut = %s", (rut,))
+            result = cur.fetchone()
+            id_usuario = result[0] if result and result[0] else None
+            # Eliminar trabajador
             cur.execute("DELETE FROM trabajadores WHERE rut = %s", (rut,))
+            # Eliminar usuario si existe
+            if id_usuario:
+                cur.execute("DELETE FROM usuarios WHERE id = %s", (id_usuario,))
             conn.commit()
-            return True, "Trabajador eliminado"
+            return True, "Trabajador y usuario asociado eliminados"
     except Exception as e:
         conn.rollback()
         return False, str(e)

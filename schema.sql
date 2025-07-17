@@ -7,7 +7,6 @@ CREATE TABLE perfiles (
     nombre_perfil VARCHAR(50) UNIQUE NOT NULL -- Ej: 'Admin', 'RRHH', 'Trabajador'
 );
 
--- Tabla para las áreas de la empresa
 CREATE TABLE areas (
     id SERIAL PRIMARY KEY,
     nombre_area VARCHAR(100) UNIQUE NOT NULL

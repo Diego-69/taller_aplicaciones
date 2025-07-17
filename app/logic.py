@@ -62,13 +62,11 @@ def registrar_trabajador(data):
                 (data["username"], hash_pw, id_perfil)
             )
             id_usuario = cur.fetchone()[0]
-            # Inserta el trabajador (por defecto cargo=1, departamento=1, puedes ajustar esto)
-            # Se asume que el registro de trabajador no asigna cargo ni depto inicialmente.
-            # Esto debería ser completado por RRHH.
+            # Inserta el trabajador con cargo y departamento seleccionados
             cur.execute(
                 "INSERT INTO trabajadores (rut, id_usuario, nombre_completo, sexo, direccion, telefono, fecha_ingreso, id_cargo, id_departamento) "
-                "VALUES (%s, %s, %s, %s, %s, %s, CURRENT_DATE, 1, 1)", # IDs por defecto
-                (data["rut"], id_usuario, data["nombre"], data["sexo"], data["direccion"], data["telefono"])
+                "VALUES (%s, %s, %s, %s, %s, %s, CURRENT_DATE, %s, %s)",
+                (data["rut"], id_usuario, data["nombre"], data["sexo"], data["direccion"], data["telefono"], data["id_cargo"], data["id_departamento"])
             )
             conn.commit()
             return True, "Usuario registrado correctamente. Un administrador de RRHH asignará su cargo y departamento."

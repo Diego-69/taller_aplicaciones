@@ -36,27 +36,72 @@ class MainWindow(QWidget):
         self.setLayout(self.layout)
 
     def setup_ui(self):
-        from PyQt6.QtWidgets import QAbstractItemView
         action_layout = QHBoxLayout()
-        if self.perfil == 'RRHH':
-            add_btn = QPushButton("Añadir Trabajador")
-            add_btn.clicked.connect(self.add_worker)
-            action_layout.addWidget(add_btn)
-            del_btn = QPushButton("Eliminar Trabajador(es)")
-            del_btn.clicked.connect(self.delete_workers)
-            action_layout.addWidget(del_btn)
-        # Botón cerrar sesión
+        # Botón cerrar sesión siempre visible
         logout_btn = QPushButton("Cerrar sesión")
         logout_btn.clicked.connect(self.logout)
         action_layout.addWidget(logout_btn)
         self.layout.addLayout(action_layout)
-        self.table = QTableWidget()
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["RUT", "Nombre", "Sexo", "Cargo", "Acciones"])
-        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QTableWidget.SelectionMode.MultiSelection)
-        self.layout.addWidget(self.table)
-        self.load_workers()
+
+        if self.perfil == 'RRHH':
+            add_btn = QPushButton("Añadir Trabajador")
+            add_btn.clicked.connect(self.add_worker)
+            action_layout.insertWidget(0, add_btn)
+            del_btn = QPushButton("Eliminar Trabajador(es)")
+            del_btn.clicked.connect(self.delete_workers)
+            action_layout.insertWidget(1, del_btn)
+            self.table = QTableWidget()
+            self.table.setColumnCount(5)
+            self.table.setHorizontalHeaderLabels(["RUT", "Nombre", "Sexo", "Cargo", "Acciones"])
+            self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+            self.table.setSelectionMode(QTableWidget.SelectionMode.MultiSelection)
+            self.layout.addWidget(self.table)
+            self.load_workers()
+        elif self.perfil == 'Trabajador':
+            # Mostrar solo datos del trabajador logueado
+            from app.database import get_worker_by_rut, get_cargas_by_trabajador, get_contactos_by_trabajador
+            datos = get_worker_by_rut(self.rut_trabajador)
+            if datos:
+                info = QLabel(f"<b>Bienvenido, {datos[1]}</b><br>RUT: {datos[0]}<br>Sexo: {datos[2]}<br>Dirección: {datos[3]}<br>Teléfono: {datos[4]}<br>Cargo: {datos[7]}<br>Departamento: {datos[8]}")
+                self.layout.addWidget(info)
+            else:
+                self.layout.addWidget(QLabel("No se encontraron datos personales."))
+
+            # Panel de cargas familiares
+            cargas = get_cargas_by_trabajador(self.rut_trabajador)
+            cargas_label = QLabel("<b>Cargas Familiares:</b>")
+            self.layout.addWidget(cargas_label)
+            if cargas:
+                cargas_table = QTableWidget()
+                cargas_table.setColumnCount(4)
+                cargas_table.setHorizontalHeaderLabels(["RUT", "Nombre", "Parentesco", "Sexo"])
+                cargas_table.setRowCount(len(cargas))
+                for row_idx, carga in enumerate(cargas):
+                    for col_idx, value in enumerate(carga[1:]):
+                        cargas_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
+                cargas_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+                self.layout.addWidget(cargas_table)
+            else:
+                self.layout.addWidget(QLabel("No tienes cargas familiares registradas."))
+
+            # Panel de contactos de emergencia
+            contactos = get_contactos_by_trabajador(self.rut_trabajador)
+            contactos_label = QLabel("<b>Contactos de Emergencia:</b>")
+            self.layout.addWidget(contactos_label)
+            if contactos:
+                contactos_table = QTableWidget()
+                contactos_table.setColumnCount(3)
+                contactos_table.setHorizontalHeaderLabels(["Nombre", "Relación", "Teléfono"])
+                contactos_table.setRowCount(len(contactos))
+                for row_idx, contacto in enumerate(contactos):
+                    for col_idx, value in enumerate(contacto[1:]):
+                        contactos_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
+                contactos_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+                self.layout.addWidget(contactos_table)
+            else:
+                self.layout.addWidget(QLabel("No tienes contactos de emergencia registrados."))
+        else:
+            self.layout.addWidget(QLabel("Perfil no soportado."))
 
     def logout(self):
         self.close()
@@ -205,6 +250,7 @@ class CargaFormDialog(QDialog):
     """
     def __init__(self, rut_trabajador, id_carga=None):
         super().__init__()
+        self.rut_trabajador = rut_trabajador
         self.id_carga = id_carga
         self.setWindowTitle("Carga Familiar")
         layout = QFormLayout()
@@ -225,7 +271,7 @@ class CargaFormDialog(QDialog):
             self.load_data()
 
     def load_data(self):
-        cargas = get_cargas_by_trabajador(self.parent().rut_trabajador)
+        cargas = get_cargas_by_trabajador(self.rut_trabajador)
         for carga in cargas:
             if carga[0] == self.id_carga:
                 self.rut_input.setText(carga[1])
@@ -247,7 +293,7 @@ class CargaFormDialog(QDialog):
         if self.id_carga:
             success, msg = update_carga(self.id_carga, [rut, nombre, parentesco, sexo])
         else:
-            success, msg = insert_carga([rut, self.parent().rut_trabajador, nombre, parentesco, sexo])
+            success, msg = insert_carga([rut, self.rut_trabajador, nombre, parentesco, sexo])
         if success:
             QMessageBox.information(self, "Éxito", msg)
             self.accept()
@@ -326,6 +372,7 @@ class ContactoFormDialog(QDialog):
     """
     def __init__(self, rut_trabajador, id_contacto=None):
         super().__init__()
+        self.rut_trabajador = rut_trabajador
         self.id_contacto = id_contacto
         self.setWindowTitle("Contacto de Emergencia")
         layout = QFormLayout()
@@ -343,7 +390,7 @@ class ContactoFormDialog(QDialog):
             self.load_data()
 
     def load_data(self):
-        contactos = get_contactos_by_trabajador(self.parent().rut_trabajador)
+        contactos = get_contactos_by_trabajador(self.rut_trabajador)
         for contacto in contactos:
             if contacto[0] == self.id_contacto:
                 self.nombre_input.setText(contacto[1])
@@ -363,7 +410,7 @@ class ContactoFormDialog(QDialog):
         if self.id_contacto:
             success, msg = update_contacto(self.id_contacto, [nombre, relacion, telefono])
         else:
-            success, msg = insert_contacto([self.parent().rut_trabajador, nombre, relacion, telefono])
+            success, msg = insert_contacto([self.rut_trabajador, nombre, relacion, telefono])
         if success:
             QMessageBox.information(self, "Éxito", msg)
             self.accept()
