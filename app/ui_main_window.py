@@ -37,7 +37,6 @@ class MainWindow(QWidget):
 
     def setup_ui(self):
         action_layout = QHBoxLayout()
-        # Botón cerrar sesión siempre visible
         logout_btn = QPushButton("Cerrar sesión")
         logout_btn.clicked.connect(self.logout)
         action_layout.addWidget(logout_btn)
@@ -51,57 +50,24 @@ class MainWindow(QWidget):
             del_btn.clicked.connect(self.delete_workers)
             action_layout.insertWidget(1, del_btn)
             self.table = QTableWidget()
-            self.table.setColumnCount(5)
-            self.table.setHorizontalHeaderLabels(["RUT", "Nombre", "Sexo", "Cargo", "Acciones"])
+            self.table.setColumnCount(7)  # Ajustar columnas
+            self.table.setHorizontalHeaderLabels(["RUT", "Nombre", "Sexo", "Dirección", "Teléfono", "Cargo", "Acciones"])
             self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
             self.table.setSelectionMode(QTableWidget.SelectionMode.MultiSelection)
             self.layout.addWidget(self.table)
             self.load_workers()
+
         elif self.perfil == 'Trabajador':
-            # Mostrar solo datos del trabajador logueado
-            from app.database import get_worker_by_rut, get_cargas_by_trabajador, get_contactos_by_trabajador
+            from app.database import get_worker_by_rut
             datos = get_worker_by_rut(self.rut_trabajador)
             if datos:
-                info = QLabel(f"<b>Bienvenido, {datos[1]}</b><br>RUT: {datos[0]}<br>Sexo: {datos[2]}<br>Dirección: {datos[3]}<br>Teléfono: {datos[4]}<br>Cargo: {datos[7]}<br>Departamento: {datos[8]}")
+                info = QLabel(f"<b>Bienvenido, {datos[1]}</b><br>RUT: {datos[0]}<br>Sexo: {datos[2]}<br>Dirección: {datos[3]}<br>Teléfono: {datos[4]}<br>Cargo: {datos[6]}<br>Departamento: {datos[7]}")
                 self.layout.addWidget(info)
+                mod_btn = QPushButton("Modificar mis datos")
+                mod_btn.clicked.connect(lambda: self.open_worker_detail(datos[0]))
+                self.layout.addWidget(mod_btn)
             else:
                 self.layout.addWidget(QLabel("No se encontraron datos personales."))
-
-            # Panel de cargas familiares
-            cargas = get_cargas_by_trabajador(self.rut_trabajador)
-            cargas_label = QLabel("<b>Cargas Familiares:</b>")
-            self.layout.addWidget(cargas_label)
-            if cargas:
-                cargas_table = QTableWidget()
-                cargas_table.setColumnCount(4)
-                cargas_table.setHorizontalHeaderLabels(["RUT", "Nombre", "Parentesco", "Sexo"])
-                cargas_table.setRowCount(len(cargas))
-                for row_idx, carga in enumerate(cargas):
-                    for col_idx, value in enumerate(carga[1:]):
-                        cargas_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
-                cargas_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-                self.layout.addWidget(cargas_table)
-            else:
-                self.layout.addWidget(QLabel("No tienes cargas familiares registradas."))
-
-            # Panel de contactos de emergencia
-            contactos = get_contactos_by_trabajador(self.rut_trabajador)
-            contactos_label = QLabel("<b>Contactos de Emergencia:</b>")
-            self.layout.addWidget(contactos_label)
-            if contactos:
-                contactos_table = QTableWidget()
-                contactos_table.setColumnCount(3)
-                contactos_table.setHorizontalHeaderLabels(["Nombre", "Relación", "Teléfono"])
-                contactos_table.setRowCount(len(contactos))
-                for row_idx, contacto in enumerate(contactos):
-                    for col_idx, value in enumerate(contacto[1:]):
-                        contactos_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
-                contactos_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-                self.layout.addWidget(contactos_table)
-            else:
-                self.layout.addWidget(QLabel("No tienes contactos de emergencia registrados."))
-        else:
-            self.layout.addWidget(QLabel("Perfil no soportado."))
 
     def logout(self):
         self.close()
@@ -113,17 +79,40 @@ class MainWindow(QWidget):
         workers = get_all_workers()
         for row_idx, worker in enumerate(workers):
             self.table.insertRow(row_idx)
-            for col_idx, value in enumerate(worker[:4]):
-                self.table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
+            self.table.setItem(row_idx, 0, QTableWidgetItem(str(worker[0])))  # RUT
+            self.table.setItem(row_idx, 1, QTableWidgetItem(str(worker[1])))  # Nombre
+            self.table.setItem(row_idx, 2, QTableWidgetItem(str(worker[2])))  # Sexo
+            self.table.setItem(row_idx, 3, QTableWidgetItem(str(worker[3])))  # Dirección
+            self.table.setItem(row_idx, 4, QTableWidgetItem(str(worker[4])))  # Teléfono
+            self.table.setItem(row_idx, 5, QTableWidgetItem(str(worker[6])))  # Cargo
             # Botón de acciones
             btn = QPushButton("Ver Detalle")
             btn.clicked.connect(lambda _, rut=worker[0]: self.open_worker_detail(rut))
-            self.table.setCellWidget(row_idx, 4, btn)
+            self.table.setCellWidget(row_idx, 6, btn)
+
+    def open_worker_detail(self, rut):
+        # RRHH puede ver y gestionar detalles de cualquier trabajador
+        # Trabajador solo puede ver/modificar los suyos
+        if self.perfil == 'Trabajador':
+            if rut != self.rut_trabajador:
+                QMessageBox.warning(self, "Acceso denegado", "No puedes acceder a los datos de otro trabajador.")
+                return
+            dlg = WorkerDetailDialog(rut, editable=True)
+        else:
+            dlg = WorkerDetailDialog(rut)
+        dlg.exec()
+        if self.perfil == 'RRHH':
+            self.load_workers()
 
     def add_worker(self):
         dlg = WorkerFormDialog(self)
         if dlg.exec():
             self.load_workers()
+            # Mostrar detalle del trabajador recién registrado
+            rut_nuevo = dlg.rut_input.text().strip()
+            if rut_nuevo:
+                detalle = WorkerDetailDialog(rut_nuevo)
+                detalle.exec()
 
     def delete_workers(self):
         selected = self.table.selectionModel().selectedRows()
@@ -144,21 +133,37 @@ class MainWindow(QWidget):
                 QMessageBox.warning(self, "Algunos no eliminados", "No se pudieron eliminar:\n" + "\n".join(errores))
             self.load_workers()
 
-    def open_worker_detail(self, rut):
-        dlg = WorkerDetailDialog(rut)
-        dlg.exec()
-        self.load_workers()
-
 class WorkerDetailDialog(QDialog):
     """
     Diálogo para ver y gestionar cargas familiares y contactos de emergencia de un trabajador.
     """
-    def __init__(self, rut_trabajador):
+    def __init__(self, rut_trabajador, editable=False):
         super().__init__()
         self.rut_trabajador = rut_trabajador
         self.setWindowTitle(f"Detalle de {rut_trabajador}")
         layout = QVBoxLayout()
-        layout.addWidget(QLabel(f"RUT: {rut_trabajador}"))
+        from app.database import get_worker_by_rut, update_worker
+        datos = get_worker_by_rut(rut_trabajador)
+        if datos:
+            layout.addWidget(QLabel(f"RUT: {datos[0]}"))
+            layout.addWidget(QLabel(f"Nombre: {datos[1]}"))
+            layout.addWidget(QLabel(f"Sexo: {datos[2]}"))
+            # Campos editables para trabajador
+            if editable:
+                self.direccion_input = QLineEdit(datos[3])
+                self.telefono_input = QLineEdit(datos[4])
+                layout.addWidget(QLabel("Dirección:"))
+                layout.addWidget(self.direccion_input)
+                layout.addWidget(QLabel("Teléfono:"))
+                layout.addWidget(self.telefono_input)
+                save_btn = QPushButton("Guardar cambios")
+                save_btn.clicked.connect(self.save)
+                layout.addWidget(save_btn)
+            else:
+                layout.addWidget(QLabel(f"Dirección: {datos[3]}"))
+                layout.addWidget(QLabel(f"Teléfono: {datos[4]}"))
+            layout.addWidget(QLabel(f"Cargo: {datos[6]}"))
+            layout.addWidget(QLabel(f"Departamento: {datos[7]}"))
         # Botones para gestionar cargas/contactos
         btns = QHBoxLayout()
         btn_cargas = QPushButton("Gestionar Cargas Familiares")
@@ -169,6 +174,24 @@ class WorkerDetailDialog(QDialog):
         btns.addWidget(btn_contactos)
         layout.addLayout(btns)
         self.setLayout(layout)
+
+    def save(self):
+        from app.database import update_worker
+        direccion = self.direccion_input.text().strip()
+        telefono = self.telefono_input.text().strip()
+        if not direccion or not telefono:
+            QMessageBox.warning(self, "Datos incompletos", "Dirección y teléfono son obligatorios.")
+            return
+        # Actualizar solo dirección y teléfono
+        from app.database import get_worker_by_rut
+        datos = get_worker_by_rut(self.rut_trabajador)
+        new_data = [datos[1], datos[2], direccion, telefono, datos[5], datos[6], datos[7]]
+        ok, msg = update_worker(self.rut_trabajador, new_data)
+        if ok:
+            QMessageBox.information(self, "Éxito", "Datos actualizados correctamente.")
+            self.accept()
+        else:
+            QMessageBox.critical(self, "Error", msg)
 
     def open_cargas_dialog(self):
         dlg = CargasDialog(self.rut_trabajador)
@@ -431,6 +454,9 @@ class WorkerFormDialog(QDialog):
         self.sexo_combo.addItems(["Masculino", "Femenino", "Otro"])
         self.direccion_input = QLineEdit()
         self.telefono_input = QLineEdit()
+        self.usuario_input = QLineEdit()
+        self.contrasena_input = QLineEdit()
+        self.contrasena_input.setEchoMode(QLineEdit.EchoMode.Password)
         
         self.cargo_combo = QComboBox()
         self.depto_combo = QComboBox()
@@ -441,6 +467,8 @@ class WorkerFormDialog(QDialog):
         layout.addRow("Sexo:", self.sexo_combo)
         layout.addRow("Dirección:", self.direccion_input)
         layout.addRow("Teléfono:", self.telefono_input)
+        layout.addRow("Usuario:", self.usuario_input)
+        layout.addRow("Contraseña:", self.contrasena_input)
         layout.addRow("Cargo:", self.cargo_combo)
         layout.addRow("Departamento:", self.depto_combo)
         
@@ -464,12 +492,14 @@ class WorkerFormDialog(QDialog):
         sexo = self.sexo_combo.currentText()
         direccion = self.direccion_input.text().strip()
         telefono = self.telefono_input.text().strip()
+        usuario = self.usuario_input.text().strip()
+        contrasena = self.contrasena_input.text().strip()
         
         id_cargo = self.cargo_combo.currentData()
         id_depto = self.depto_combo.currentData()
 
-        if not all([rut, nombre, sexo, id_cargo, id_depto]):
-            QMessageBox.warning(self, "Datos incompletos", "Todos los campos obligatorios (RUT, Nombre, Sexo, Cargo, Departamento) deben estar completos.")
+        if not all([rut, nombre, sexo, id_cargo, id_depto, usuario, contrasena]):
+            QMessageBox.warning(self, "Datos incompletos", "Todos los campos obligatorios (incluyendo Usuario y Contraseña) deben estar completos.")
             return
         if not validar_rut(rut):
             QMessageBox.warning(self, "RUT inválido", "El RUT ingresado no tiene un formato válido.")
@@ -482,7 +512,8 @@ class WorkerFormDialog(QDialog):
         from datetime import date
         fecha_ingreso = date.today().isoformat()
 
-        ok, msg = insert_worker((rut, nombre, sexo, direccion, telefono, fecha_ingreso, id_cargo, id_depto))
+        from app.database import insert_worker_with_user
+        ok, msg = insert_worker_with_user((rut, nombre, sexo, direccion, telefono, fecha_ingreso, id_cargo, id_depto, usuario, contrasena))
         if ok:
             QMessageBox.information(self, "Éxito", msg)
             self.accept()

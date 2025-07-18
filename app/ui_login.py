@@ -25,9 +25,6 @@ class LoginWindow(QWidget):
         login_button = QPushButton("Iniciar Sesión")
         login_button.clicked.connect(self.handle_login)
         layout.addWidget(login_button)
-        register_button = QPushButton("Registrarse")
-        register_button.clicked.connect(self.open_register)
-        layout.addWidget(register_button)
         self.setLayout(layout)
     def handle_login(self):
         username = self.username_input.text()

@@ -1,3 +1,44 @@
+from typing import Tuple
+def insert_worker_with_user(data: Tuple[str, str, str, str, str, str, int, int, str, str]) -> Tuple[bool, str]:
+    """
+    Inserta un nuevo trabajador y su usuario en la base de datos.
+    data: (rut, nombre, sexo, direccion, telefono, fecha_ingreso, id_cargo, id_depto, usuario, contrasena)
+    """
+    conn = get_db_connection()
+    if not conn:
+        return False, "Error de conexión"
+    try:
+        with conn.cursor() as cur:
+            # Verificar que el nombre de usuario no exista
+            cur.execute("SELECT id FROM usuarios WHERE nombre_usuario = %s", (data[8],))
+            if cur.fetchone() is not None:
+                return False, "El nombre de usuario ya existe."
+            # Insertar usuario
+            import bcrypt
+            contrasena_hash = bcrypt.hashpw(data[9].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            # Obtener id_perfil dinámicamente para 'Trabajador'
+            cur.execute("SELECT id FROM perfiles WHERE nombre_perfil = %s", ('Trabajador',))
+            perfil_row = cur.fetchone()
+            if not perfil_row:
+                return False, "No existe el perfil 'Trabajador' en la base de datos."
+            id_perfil_trabajador = perfil_row[0]
+            cur.execute("INSERT INTO usuarios (nombre_usuario, contrasena_hash, id_perfil) VALUES (%s, %s, %s) RETURNING id", (data[8], contrasena_hash, id_perfil_trabajador))
+            res = cur.fetchone()
+            if res is None:
+                return False, "No se pudo crear el usuario."
+            id_usuario = res[0]
+            # Insertar trabajador
+            cur.execute("""
+                INSERT INTO trabajadores (rut, id_usuario, nombre_completo, sexo, direccion, telefono, fecha_ingreso, id_cargo, id_departamento)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (data[0], id_usuario, data[1], data[2], data[3], data[4], data[5], data[6], data[7]))
+            conn.commit()
+            return True, "Trabajador y usuario añadidos"
+    except Exception as e:
+        conn.rollback()
+        return False, str(e)
+    finally:
+        conn.close()
 """
 Módulo de acceso a datos para El Correo de Yury.
 Contiene funciones para conectar y consultar la base de datos PostgreSQL.
