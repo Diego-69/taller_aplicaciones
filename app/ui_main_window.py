@@ -142,7 +142,7 @@ class WorkerDetailDialog(QDialog):
         self.rut_trabajador = rut_trabajador
         self.setWindowTitle(f"Detalle de {rut_trabajador}")
         layout = QVBoxLayout()
-        from app.database import get_worker_by_rut, update_worker
+        from app.database import get_worker_by_rut, update_worker, get_all_cargos, get_all_departamentos
         datos = get_worker_by_rut(rut_trabajador)
         if datos:
             layout.addWidget(QLabel(f"RUT: {datos[0]}"))
@@ -164,6 +164,9 @@ class WorkerDetailDialog(QDialog):
                 layout.addWidget(QLabel(f"Teléfono: {datos[4]}"))
             layout.addWidget(QLabel(f"Cargo: {datos[6]}"))
             layout.addWidget(QLabel(f"Departamento: {datos[7]}"))
+            # Los ids están en las posiciones 9 y 10
+            self.id_cargo = datos[9]
+            self.id_depto = datos[10]
         # Botones para gestionar cargas/contactos
         btns = QHBoxLayout()
         btn_cargas = QPushButton("Gestionar Cargas Familiares")
@@ -182,10 +185,12 @@ class WorkerDetailDialog(QDialog):
         if not direccion or not telefono:
             QMessageBox.warning(self, "Datos incompletos", "Dirección y teléfono son obligatorios.")
             return
-        # Actualizar solo dirección y teléfono
         from app.database import get_worker_by_rut
         datos = get_worker_by_rut(self.rut_trabajador)
-        new_data = [datos[1], datos[2], direccion, telefono, datos[5], datos[6], datos[7]]
+        # Usar los ids correctos para cargo y departamento
+        id_cargo = self.id_cargo
+        id_depto = self.id_depto
+        new_data = [datos[1], datos[2], direccion, telefono, datos[5], id_cargo, id_depto]
         ok, msg = update_worker(self.rut_trabajador, new_data)
         if ok:
             QMessageBox.information(self, "Éxito", "Datos actualizados correctamente.")

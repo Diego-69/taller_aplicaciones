@@ -121,14 +121,15 @@ def get_all_departamentos():
         conn.close()
 
 def get_worker_by_rut(rut):
-    """Obtiene los datos personales completos de un trabajador por su RUT."""
+    """Obtiene los datos personales completos de un trabajador por su RUT, incluyendo ids de cargo y departamento."""
     conn = get_db_connection()
     if not conn:
         return None
     try:
         with conn.cursor() as cur:
             query = '''
-                SELECT t.rut, t.nombre_completo, t.sexo, t.direccion, t.telefono, t.fecha_ingreso, c.nombre_cargo, d.nombre_departamento, a.nombre_area
+                SELECT t.rut, t.nombre_completo, t.sexo, t.direccion, t.telefono, t.fecha_ingreso,
+                       c.nombre_cargo, d.nombre_departamento, a.nombre_area, t.id_cargo, t.id_departamento
                 FROM trabajadores t
                 JOIN cargos c ON t.id_cargo = c.id
                 JOIN departamentos d ON t.id_departamento = d.id
