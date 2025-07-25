@@ -1,93 +1,126 @@
-# Sistema de Gestión de Recursos Humanos - "El Correo de Yury"
+# El Correo de Yury - Gestión de Recursos Humanos
 
-Este proyecto es una aplicación de escritorio desarrollada en Python para la gestión de la nómina y los datos de los trabajadores de la empresa "El Correo de Yury". La aplicación centraliza la información de los empleados, automatiza tareas de RR.HH. y ofrece un portal de autoservicio para los trabajadores, reemplazando la gestión manual a través de planillas Excel.
-
-## ✨ Características Principales
-
-- **Autenticación Segura**: Inicio de sesión basado en roles de usuario con contraseñas encriptadas (hashed).
-
-- **Gestión de Trabajadores**:
-    - Listado completo de trabajadores activos en una tabla resumen.
-    - Creación, visualización y edición de la ficha completa del trabajador (datos personales, laborales, contactos de emergencia y cargas familiares).
-
-- **Acceso Basado en Roles**:
-    - **Personal de RR.HH.**: Puede gestionar la información de todos los trabajadores.
-    - **Jefe de RR.HH.**: Tiene acceso a herramientas de filtrado avanzadas para generar reportes específicos.
-    - **Trabajador**: Puede visualizar su propia información y modificar sus datos personales, contactos y cargas familiares.
-
-- **Filtros Avanzados**: Herramientas para que la jefatura de RR.HH. pueda filtrar el listado de trabajadores por sexo, cargo, área y departamento.
-
-- **Portal de Autoservicio**: Permite a los empleados gestionar su propia información personal, reduciendo la carga administrativa del equipo de RR.HH.
-
-## 🛠️ Tecnologías Utilizadas
-
-- **Lenguaje de Programación**: Python 3
-- **Interfaz Gráfica (GUI)**: PyQt6
-- **Base de Datos**: PostgreSQL
-- **Conector de Base de Datos**: psycopg2-binary
-- **Encriptación de Contraseñas**: bcrypt
-
-## 🚀 Instalación y Configuración
-
-Sigue estos pasos para poner en marcha el proyecto en tu máquina local.
-
-### 1. Requisitos Previos
-
-- Tener instalado Python 3.8 o superior.
-- Tener instalado y en ejecución un servidor de PostgreSQL.
-
-### 2. Configuración del Entorno
-
-```bash
-# 1. Clona este repositorio en tu máquina local
-git clone https://github.com/tu_usuario/tu_repositorio.git
-cd tu_repositorio
-
-# 2. Crea un entorno virtual para el proyecto
-python -m venv venv
-
-# 3. Activa el entorno virtual
-# En Windows:
-venv\Scripts\activate
-# En macOS/Linux:
-source venv/bin/activate
-
-# 4. Instala todas las dependencias necesarias
-pip install -r requirements.txt
-```
-
-### 3. Configuración de la Base de Datos
-
-1. Crea una nueva base de datos en PostgreSQL para el proyecto (ej. `correo_yury_db`).
-2. Ejecuta el script `schema.sql` (el que contiene todas las sentencias CREATE TABLE e INSERT) en tu base de datos para crear la estructura de tablas y cargar los datos iniciales.
-3. Abre los archivos `app_nomina.py` y `crear_usuario.py` en tu editor de código.
-4. Modifica el diccionario `DB_CONFIG` en ambos archivos con tus credenciales de conexión a PostgreSQL (nombre de la base de datos, usuario, contraseña, etc.).
-
-### 4. Creación del Usuario Inicial
-
-La base de datos se crea con contraseñas de ejemplo que no son funcionales. Para poder iniciar sesión, debes crear un usuario con una contraseña real.
-
-```bash
-# Ejecuta este script UNA VEZ para crear el usuario 'rrhh.user'
-# con la contraseña '12345'.
-python crear_usuario.py
-```
-
-## ▶️ Uso de la Aplicación
-
-Una vez completada la instalación y configuración:
-
-1. Asegúrate de que tu entorno virtual esté activado.
-2. Ejecuta la aplicación principal:
-     ```bash
-     python app_nomina.py
-     ```
-3. Se abrirá la ventana de inicio de sesión. Ingresa con las siguientes credenciales:
-     - **Usuario**: `rrhh.user`
-     - **Contraseña**: `12345`
-
-¡Listo! Ya puedes empezar a utilizar el sistema.
+Aplicación de escritorio para la gestión de trabajadores, cargas familiares y contactos de emergencia en la empresa "El Correo de Yury". Desarrollada en Python con PyQt6 y PostgreSQL.
 
 ---
 
-Proyecto desarrollado como solución a las necesidades de gestión de personal de "El Correo de Yury".
+## Características principales
+
+- **Login seguro** con perfiles: Admin, RRHH y Trabajador.
+- **Registro de trabajadores** desde la ventana de login.
+- **CRUD completo** para trabajadores, cargas familiares y contactos de emergencia.
+- **Gestión de perfiles** y roles de usuario.
+- **Validaciones** de datos (RUT, teléfono, campos obligatorios).
+- **Documentación y manuales** incluidos.
+- **Estructura modular** y modelo en n-capas para fácil mantenimiento.
+
+---
+
+## Estructura del proyecto
+
+```
+eva4_tallerApps/
+│
+├── main.py
+├── requirements.txt
+├── schema.sql
+│
+├── app/
+│   ├── __init__.py
+│   ├── database.py
+│   ├── logic.py
+│   ├── ui_login.py
+│   ├── ui_main_window.py
+│   ├── ui_register.py
+│   └── docs/
+│       ├── MANUAL_USUARIO.md
+│       ├── MANUAL_INSTALACION.md
+│       └── TERMINOS_Y_CONDICIONES.md
+│
+├── test/
+│   └── PRUEBAS.md
+```
+
+---
+
+## Instalación rápida
+
+1. **Clona el repositorio** o descarga los archivos.
+2. **Crea y activa un entorno virtual** (opcional pero recomendado):
+
+   ```sh
+   python -m venv venv
+   venv\Scripts\activate   # En Windows
+   ```
+
+3. **Instala las dependencias**:
+
+   ```sh
+   pip install -r requirements.txt
+   ```
+
+4. **Configura la base de datos**:
+   - Crea una base de datos PostgreSQL llamada `correo_yury`.
+   - Ejecuta el script `schema.sql` para crear las tablas y datos iniciales.
+
+5. **Configura la conexión** en `app/database.py` si es necesario (usuario, contraseña, host, etc).
+
+6. **Ejecuta la aplicación**:
+
+   ```sh
+   python main.py
+   ```
+
+---
+
+## Primeros pasos
+
+- Inicia sesión con el usuario inicial:
+  - **Usuario:** `admin_rrhh`
+  - **Contraseña:** `admin123`
+  - **Perfil:** RRHH
+
+- Los trabajadores pueden registrarse desde el botón "Registrarse" en la ventana de login.
+
+---
+
+## Manuales y documentación
+
+- [Manual de Usuario](app/docs/MANUAL_USUARIO.md)
+- [Manual de Instalación](app/docs/MANUAL_INSTALACION.md)
+- [Términos y Condiciones](app/docs/TERMINOS_Y_CONDICIONES.md)
+- [Casos de Prueba](test/PRUEBAS.md)
+
+---
+
+## Tecnologías utilizadas
+
+- Python 3.x
+- PyQt6
+- PostgreSQL
+- psycopg2
+- bcrypt
+
+---
+
+## Estructura de la base de datos
+
+Consulta el archivo [`schema.sql`](schema.sql) para ver la estructura completa y los datos iniciales.
+
+---
+
+## Contribuciones
+
+Si deseas mejorar la aplicación, puedes crear un fork y enviar un pull request.  
+Para reportar errores o sugerencias, utiliza el sistema de issues del repositorio.
+
+---
+
+## Licencia
+
+Este proyecto es de uso interno para "El Correo de Yury". Consulta [Términos y Condiciones](app/docs/TERMINOS_Y_CONDICIONES.md).
+
+---
+
+**Desarrollado por:**  
+Ygnac - 2025
